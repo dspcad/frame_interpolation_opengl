@@ -76,4 +76,22 @@ target_link_libraries(weather_effect
 set_target_properties(weather_effect PROPERTIES XCODE_ATTRIBUTE_CONFIGURATION_BUILD_DIR "${CMAKE_CURRENT_SOURCE_DIR}/demo/")
 create_target_launcher(weather_effect WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/demo/")
 
+# Weather Effect Demo
+add_executable(img_render
+	img_render/weather_effect.cpp
+	common/shader.cpp
+	common/shader.hpp
+	common/texture.cpp
+	common/texture.hpp
+	
+	img_render/SimpleFragmentShader.fragmentshader
+	img_render/SimpleVertexShader.vertexshader
+)
+target_link_libraries(img_render
+	${ALL_LIBS}
+)
+# Xcode and Visual working directories
+set_target_properties(img_render PROPERTIES XCODE_ATTRIBUTE_CONFIGURATION_BUILD_DIR "${CMAKE_CURRENT_SOURCE_DIR}/img_render/")
+create_target_launcher(img_render WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/img_render/")
+
 
