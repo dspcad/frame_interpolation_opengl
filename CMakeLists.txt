@@ -94,4 +94,20 @@ target_link_libraries(img_render
 set_target_properties(img_render PROPERTIES XCODE_ATTRIBUTE_CONFIGURATION_BUILD_DIR "${CMAKE_CURRENT_SOURCE_DIR}/img_render/")
 create_target_launcher(img_render WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/img_render/")
 
+# simple compute shader
+add_executable(compute_shader
+        compute_shader/frame_interpolation.cpp
+        common/shader.cpp
+        common/shader.hpp
+        common/texture.cpp
+        common/texture.hpp
+
+        compute_shader/compute.shader
+)
+target_link_libraries(compute_shader
+        ${ALL_LIBS}
+)
+# Xcode and Visual working directories
+set_target_properties(compute_shader PROPERTIES XCODE_ATTRIBUTE_CONFIGURATION_BUILD_DIR "${CMAKE_CURRENT_SOURCE_DIR}/compute_shader/")
+create_target_launcher(compute_shader WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/compute_shader/")
 
