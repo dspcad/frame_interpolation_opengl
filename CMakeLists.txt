@@ -83,6 +83,8 @@ add_executable(img_render
 	common/shader.hpp
 	common/texture.cpp
 	common/texture.hpp
+	common/img_util.cpp
+	common/img_util.hpp
 	
 	img_render/SimpleFragmentShader.fragmentshader
 	img_render/SimpleVertexShader.vertexshader
