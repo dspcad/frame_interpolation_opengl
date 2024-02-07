@@ -112,6 +112,9 @@ bool loadPngImage(const char *name, int &outWidth, int &outHeight, bool &outHasA
  
     unsigned int row_bytes = png_get_rowbytes(png_ptr, info_ptr);
     *outData = (unsigned char*) malloc(row_bytes * outHeight);
+
+    outHasAlpha = row_bytes/width == 4;
+
  
     png_bytepp row_pointers = png_get_rows(png_ptr, info_ptr);
  

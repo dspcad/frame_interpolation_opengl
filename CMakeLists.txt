@@ -113,3 +113,24 @@ target_link_libraries(compute_shader
 set_target_properties(compute_shader PROPERTIES XCODE_ATTRIBUTE_CONFIGURATION_BUILD_DIR "${CMAKE_CURRENT_SOURCE_DIR}/compute_shader/")
 create_target_launcher(compute_shader WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/compute_shader/")
 
+
+# FSR 1.0
+add_executable(fsr_10
+	fsr_10/main.cpp
+	common/shader.cpp
+	common/shader.hpp
+	common/texture.cpp
+	common/texture.hpp
+	common/img_util.cpp
+	common/img_util.hpp
+	
+	fsr_10/SimpleFragmentShader.fragmentshader
+	fsr_10/SimpleVertexShader.vertexshader
+)
+target_link_libraries(fsr_10
+	${ALL_LIBS}
+)
+# Xcode and Visual working directories
+set_target_properties(fsr_10 PROPERTIES XCODE_ATTRIBUTE_CONFIGURATION_BUILD_DIR "${CMAKE_CURRENT_SOURCE_DIR}/fsr_10/")
+create_target_launcher(fsr_10 WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/fsr_10/")
+
