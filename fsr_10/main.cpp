@@ -12,6 +12,8 @@
 #include <bits/stdc++.h>
 #include <chrono>
 
+#include "fsr_10/sr/fsr.h"
+
 using namespace std;
 
 
@@ -42,6 +44,80 @@ static void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
     glViewport(0, 0, width, height);
 }
+
+
+uint32_t createOutputImage(struct FSRConstants fsrData) {
+    uint32_t outputImage = 0;
+    glGenTextures(1, &outputImage);
+    glBindTexture(GL_TEXTURE_2D, outputImage);
+
+    // Setup filtering parameters for display
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+    glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA32F, fsrData.output_width, fsrData.output_height);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    return outputImage;
+}
+
+static void runFSR(struct FSRConstants fsrData, uint32_t fsrProgramEASU, uint32_t fsrProgramRCAS, uint32_t fsrData_vbo, uint32_t inputImage, uint32_t outputImage) {
+    uint32_t displayWidth = fsrData.output_width;
+    uint32_t displayHeight = fsrData.output_height;
+
+    static const int threadGroupWorkRegionDim = 16;
+    int dispatchX = (displayWidth + (threadGroupWorkRegionDim - 1)) / threadGroupWorkRegionDim;
+    int dispatchY = (displayHeight + (threadGroupWorkRegionDim - 1)) / threadGroupWorkRegionDim;
+
+
+    // binding point constants in the shaders
+    const int inFSRDataPos = 0;
+    const int inFSRInputTexture = 1;
+    const int inFSROutputTexture = 2;
+
+    { // run FSR EASU
+        glUseProgram(fsrProgramEASU);
+
+        // connect the input uniform data
+        glBindBufferBase(GL_UNIFORM_BUFFER, inFSRDataPos, fsrData_vbo);
+
+        // bind the input image to a texture unit
+        glActiveTexture(GL_TEXTURE0 + inFSRInputTexture);
+        glBindTexture(GL_TEXTURE_2D, inputImage);
+
+        // connect the output image
+        glBindImageTexture(inFSROutputTexture, outputImage, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA32F);
+
+        glDispatchCompute(dispatchX, dispatchY, 1);
+        glFinish();
+    }
+
+    {
+        // FSR RCAS
+        // connect the input uniform data
+        glBindBufferBase(GL_UNIFORM_BUFFER, inFSRDataPos, fsrData_vbo);
+
+        // connect the previous image's output as input
+        glActiveTexture(GL_TEXTURE0 + inFSRInputTexture);
+        glBindTexture(GL_TEXTURE_2D, outputImage);
+
+        // connect the output image which is the same as the input image
+        glBindImageTexture(inFSROutputTexture, outputImage, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA32F);
+
+        
+
+
+
+        glUseProgram(fsrProgramRCAS);
+        glDispatchCompute(dispatchX, dispatchY, 1);
+        glFinish();
+    }
+
+}
+
+
 
 int main(){
 
@@ -118,11 +194,42 @@ int main(){
     glEnableVertexAttribArray(2);
 
 
-    unsigned int texture;
+
+
+    /*===================
+      FSR parameters
+      ==================*/
+    struct FSRConstants fsrData = {};
+    float  resolutionScale      = 2.0f; // Ultra Quality: 1.3
+                                        // Quality:       1.5
+                                        // Balanced:      1.7
+                                        // Performance:   2.0
+    float  sharpness            = 0.0f; // sharpness in range [0-2], 0 is sharpest
+
+
+    const std::string baseDir = "sr/";
+
+    uint32_t fsrProgramEASU = createFSRComputeProgramEAUS(baseDir);
+    uint32_t fsrProgramRCAS = createFSRComputeProgramRCAS(baseDir);
+    uint32_t bilinearProgram = createBilinearComputeProgram(baseDir);
+
+    // upload the FSR constants, this contains the EASU and RCAS constants in a single uniform
+    // TODO destroy the buffer
+    unsigned int fsrData_vbo;
+    {
+        glGenBuffers(1, &fsrData_vbo);
+        glBindBuffer(GL_ARRAY_BUFFER, fsrData_vbo);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(fsrData), &fsrData, GL_DYNAMIC_DRAW);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+    }
+
+
+
+    unsigned int inputTexture;
     // texture
     // ---------
-    glGenTextures(1, &texture);
-    glBindTexture(GL_TEXTURE_2D, texture); 
+    glGenTextures(1, &inputTexture);
+    glBindTexture(GL_TEXTURE_2D, inputTexture); 
      // set the texture wrapping parameters
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);	// set texture wrapping to GL_REPEAT (default wrapping method)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
@@ -158,33 +265,19 @@ int main(){
         std::cout << "Image loaded " << w << " " << h  << std::endl;
     }
 
-    GLint loc = glGetUniformLocation(programID, "iResolution");
-    printf("loc %d\n", loc);
-    glUniform2f(loc, width, height);
-
-
-    float seconds {0.0};
-    GLint t = glGetUniformLocation(programID, "iTime");
-    printf("t: %d\n",t);
-
-
 
     glfwSetKeyCallback(window, key_callback);
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
 
+
+    uint32_t outputImage;
     while(!glfwWindowShouldClose(window)) {
         auto start = chrono::high_resolution_clock::now();
 
-        seconds = glfwGetTime();
-        glUniform1f(t, seconds);
-
-	//printf("time: %f\n",seconds);
-
 
         glClear(GL_COLOR_BUFFER_BIT);
-        //glUseProgram(programID);
 
-
+               
 
 
 	//approach 2: load image from the preloaded array
@@ -193,19 +286,37 @@ int main(){
         //printf("frame id:%d     w: %d   h: %d\n", frame_id, wh[frame_id].first, wh[frame_id].second);
 
 
-        if(wha[frame_id][2])
+        if(wha[frame_id][2]){
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, wha[frame_id][0], wha[frame_id][1], 0, GL_RGBA, GL_UNSIGNED_BYTE, textureImage);
-        else
+        }
+        else{
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, wha[frame_id][0], wha[frame_id][1], 0, GL_RGB, GL_UNSIGNED_BYTE, textureImage);
+        }
 
         glGenerateMipmap(GL_TEXTURE_2D);
        
-        glUniform1i(glGetUniformLocation(programID, "iChannel0"), 0);
 
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, inputTexture);
+
+        fsrData.input_width   = wha[frame_id][0];
+        fsrData.input_height  = wha[frame_id][1];
+        fsrData.output_width  = fsrData.input_width  * resolutionScale;
+        fsrData.output_height = fsrData.input_height * resolutionScale;
+        outputImage = createOutputImage(fsrData);
+
+        initFSR(&fsrData, sharpness);
+        glBindBuffer(GL_ARRAY_BUFFER, fsrData_vbo);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(fsrData), &fsrData, GL_DYNAMIC_DRAW);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+        printf("Running FSR\n");
+        runFSR(fsrData, fsrProgramEASU, fsrProgramRCAS, fsrData_vbo, inputTexture, outputImage);
 
 
         glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, texture);
+        glBindTexture(GL_TEXTURE_2D, outputImage);
+
 
         // Draw the triangle with VAO
         //glDrawArrays(GL_TRIANGLES, 0, 6); // 3 indices starting at 0 -> 1 triangle

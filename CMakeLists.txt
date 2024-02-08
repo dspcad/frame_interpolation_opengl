@@ -117,6 +117,8 @@ create_target_launcher(compute_shader WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_
 # FSR 1.0
 add_executable(fsr_10
 	fsr_10/main.cpp
+	fsr_10/sr/fsr.cpp
+	fsr_10/sr/fsr.h
 	common/shader.cpp
 	common/shader.hpp
 	common/texture.cpp
