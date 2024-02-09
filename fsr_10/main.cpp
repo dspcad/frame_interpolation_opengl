@@ -22,6 +22,7 @@ vector<GLubyte *> imgs;
 vector<vector<int>> wha;
 int frame_id = 0;
 bool FSR_EN=false;
+bool GENERATED=false;
 
 // This function is called when a key is pressed
 static void key_callback(GLFWwindow *window, int key, int scancode, int action, int mode)
@@ -31,10 +32,12 @@ static void key_callback(GLFWwindow *window, int key, int scancode, int action, 
     }
     else if(key == GLFW_KEY_X && action == GLFW_PRESS){
 	frame_id = (frame_id+1)%10;
+        GENERATED=false;
         printf("frame id: %d\n", frame_id);
     }
     else if(key == GLFW_KEY_Z && action == GLFW_PRESS){
 	frame_id = (frame_id-1+10)%10;
+        GENERATED=false;
         printf("frame id: %d\n", frame_id);
 
     }
@@ -76,6 +79,9 @@ static void runFSR(struct FSRConstants fsrData, uint32_t fsrProgramEASU, uint32_
     int dispatchX = (displayWidth + (threadGroupWorkRegionDim - 1)) / threadGroupWorkRegionDim;
     int dispatchY = (displayHeight + (threadGroupWorkRegionDim - 1)) / threadGroupWorkRegionDim;
 
+    std::cout << "inputImage: " << inputImage << std::endl;
+    std::cout << "outputImage: " << outputImage << std::endl;
+    std::cout << "GL_TEXTURE0: " << GL_TEXTURE0 << std::endl;
 
     // binding point constants in the shaders
     const int inFSRDataPos = 0;
@@ -240,6 +246,7 @@ int main(){
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
 
+    uint32_t outputImage = createOutputImage(fsrData);
 
     bool hasAlpha;
     for(int i=1;i<=10;++i){
@@ -272,7 +279,6 @@ int main(){
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
 
     int i=0;
-    uint32_t outputImage;
     while(!glfwWindowShouldClose(window)) {
         auto start = chrono::high_resolution_clock::now();
 
@@ -286,25 +292,30 @@ int main(){
         //printf("frame id:%d     w: %d   h: %d\n", frame_id, wh[frame_id].first, wh[frame_id].second);
 
 
-        if(wha[frame_id][2]){
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, wha[frame_id][0], wha[frame_id][1], 0, GL_RGBA, GL_UNSIGNED_BYTE, textureImage);
+        if(!FSR_EN){
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, inputTexture);
+            if(wha[frame_id][2]){
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, wha[frame_id][0], wha[frame_id][1], 0, GL_RGBA, GL_UNSIGNED_BYTE, textureImage);
+            }
+            else{
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, wha[frame_id][0], wha[frame_id][1], 0, GL_RGB, GL_UNSIGNED_BYTE, textureImage);
+            }
+
+            glGenerateMipmap(GL_TEXTURE_2D);
+       
         }
         else{
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, wha[frame_id][0], wha[frame_id][1], 0, GL_RGB, GL_UNSIGNED_BYTE, textureImage);
-        }
-
-        glGenerateMipmap(GL_TEXTURE_2D);
-       
-
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, inputTexture);
-
-        if(FSR_EN){
             fsrData.input_width   = wha[frame_id][0];
             fsrData.input_height  = wha[frame_id][1];
             fsrData.output_width  = fsrData.input_width  * resolutionScale;
             fsrData.output_height = fsrData.input_height * resolutionScale;
-            outputImage = createOutputImage(fsrData);
+
+            glBindTexture(GL_TEXTURE_2D, outputImage);
+
+            glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA32F, fsrData.output_width, fsrData.output_height);
+            glBindTexture(GL_TEXTURE_2D, 0);
+
             glfwSetWindowSize(window, fsrData.output_width, fsrData.output_height);
 
             initFSR(&fsrData, sharpness);
@@ -312,16 +323,14 @@ int main(){
             glBufferData(GL_ARRAY_BUFFER, sizeof(fsrData), &fsrData, GL_DYNAMIC_DRAW);
             glBindBuffer(GL_ARRAY_BUFFER, 0);
 
-            printf("Running FSR\n");
-            runFSR(fsrData, fsrProgramEASU, fsrProgramRCAS, fsrData_vbo, inputTexture, outputImage);
-
+            if(!GENERATED){
+                printf("Running FSR\n");
+                runFSR(fsrData, fsrProgramEASU, fsrProgramRCAS, fsrData_vbo, inputTexture, outputImage);
+                GENERATED=true;
+            }
             glActiveTexture(GL_TEXTURE0);
             glBindTexture(GL_TEXTURE_2D, outputImage);
-            FSR_EN=~FSR_EN;
-        }
-        else{
-            glActiveTexture(GL_TEXTURE0);
-            glBindTexture(GL_TEXTURE_2D, inputTexture);
+            //FSR_EN=~FSR_EN;
         }
 
         // Draw the triangle with VAO
