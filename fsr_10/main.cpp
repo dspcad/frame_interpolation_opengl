@@ -21,6 +21,7 @@ GLubyte *textureImage;
 vector<GLubyte *> imgs;
 vector<vector<int>> wha;
 int frame_id = 0;
+bool FSR_EN=false;
 
 // This function is called when a key is pressed
 static void key_callback(GLFWwindow *window, int key, int scancode, int action, int mode)
@@ -30,13 +31,17 @@ static void key_callback(GLFWwindow *window, int key, int scancode, int action, 
     }
     else if(key == GLFW_KEY_X && action == GLFW_PRESS){
 	frame_id = (frame_id+1)%10;
+        printf("frame id: %d\n", frame_id);
     }
     else if(key == GLFW_KEY_Z && action == GLFW_PRESS){
 	frame_id = (frame_id-1+10)%10;
+        printf("frame id: %d\n", frame_id);
 
     }
-
-    printf("frame id: %d\n", frame_id);
+    else if(key == GLFW_KEY_F && action == GLFW_PRESS){
+        FSR_EN = !FSR_EN;
+        printf(FSR_EN ? "Enable FSR 1.0...\n" : "TURN OFF FSR 1.0...\n");
+    }
 }
 
 
@@ -105,9 +110,6 @@ static void runFSR(struct FSRConstants fsrData, uint32_t fsrProgramEASU, uint32_
 
         // connect the output image which is the same as the input image
         glBindImageTexture(inFSROutputTexture, outputImage, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA32F);
-
-        
-
 
 
         glUseProgram(fsrProgramRCAS);
@@ -269,15 +271,13 @@ int main(){
     glfwSetKeyCallback(window, key_callback);
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
 
-
+    int i=0;
     uint32_t outputImage;
     while(!glfwWindowShouldClose(window)) {
         auto start = chrono::high_resolution_clock::now();
 
 
         glClear(GL_COLOR_BUFFER_BIT);
-
-               
 
 
 	//approach 2: load image from the preloaded array
@@ -299,24 +299,30 @@ int main(){
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, inputTexture);
 
-        fsrData.input_width   = wha[frame_id][0];
-        fsrData.input_height  = wha[frame_id][1];
-        fsrData.output_width  = fsrData.input_width  * resolutionScale;
-        fsrData.output_height = fsrData.input_height * resolutionScale;
-        outputImage = createOutputImage(fsrData);
+        if(FSR_EN){
+            fsrData.input_width   = wha[frame_id][0];
+            fsrData.input_height  = wha[frame_id][1];
+            fsrData.output_width  = fsrData.input_width  * resolutionScale;
+            fsrData.output_height = fsrData.input_height * resolutionScale;
+            outputImage = createOutputImage(fsrData);
+            glfwSetWindowSize(window, fsrData.output_width, fsrData.output_height);
 
-        initFSR(&fsrData, sharpness);
-        glBindBuffer(GL_ARRAY_BUFFER, fsrData_vbo);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(fsrData), &fsrData, GL_DYNAMIC_DRAW);
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
+            initFSR(&fsrData, sharpness);
+            glBindBuffer(GL_ARRAY_BUFFER, fsrData_vbo);
+            glBufferData(GL_ARRAY_BUFFER, sizeof(fsrData), &fsrData, GL_DYNAMIC_DRAW);
+            glBindBuffer(GL_ARRAY_BUFFER, 0);
 
-        printf("Running FSR\n");
-        runFSR(fsrData, fsrProgramEASU, fsrProgramRCAS, fsrData_vbo, inputTexture, outputImage);
+            printf("Running FSR\n");
+            runFSR(fsrData, fsrProgramEASU, fsrProgramRCAS, fsrData_vbo, inputTexture, outputImage);
 
-
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, outputImage);
-
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, outputImage);
+            FSR_EN=~FSR_EN;
+        }
+        else{
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, inputTexture);
+        }
 
         // Draw the triangle with VAO
         //glDrawArrays(GL_TRIANGLES, 0, 6); // 3 indices starting at 0 -> 1 triangle
