@@ -11,6 +11,7 @@
 
 #include <bits/stdc++.h>
 #include <chrono>
+#include <unistd.h>
 
 #include "fsr_10/sr/fsr.h"
 
@@ -246,7 +247,8 @@ int main(){
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
 
-    uint32_t outputImage = createOutputImage(fsrData);
+
+
 
     bool hasAlpha;
     for(int i=1;i<=10;++i){
@@ -279,6 +281,9 @@ int main(){
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
 
     int i=0;
+    int window_w, window_h;
+    int out_w=-1, out_h=-1;
+    uint32_t outputImage = 0;
     while(!glfwWindowShouldClose(window)) {
         auto start = chrono::high_resolution_clock::now();
 
@@ -287,13 +292,15 @@ int main(){
 
 
 	//approach 2: load image from the preloaded array
-	textureImage = imgs[frame_id];
-        glfwSetWindowSize(window, wha[frame_id][0], wha[frame_id][1]);
         //printf("frame id:%d     w: %d   h: %d\n", frame_id, wh[frame_id].first, wh[frame_id].second);
 
 
         if(!FSR_EN){
-            glActiveTexture(GL_TEXTURE0);
+            GENERATED=false;
+	    textureImage = imgs[frame_id];
+            window_w = wha[frame_id][0];
+            window_h = wha[frame_id][1];
+            glActiveTexture(GL_TEXTURE1);
             glBindTexture(GL_TEXTURE_2D, inputTexture);
             if(wha[frame_id][2]){
                 glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, wha[frame_id][0], wha[frame_id][1], 0, GL_RGBA, GL_UNSIGNED_BYTE, textureImage);
@@ -302,37 +309,49 @@ int main(){
                 glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, wha[frame_id][0], wha[frame_id][1], 0, GL_RGB, GL_UNSIGNED_BYTE, textureImage);
             }
 
-            glGenerateMipmap(GL_TEXTURE_2D);
+            //glGenerateMipmap(GL_TEXTURE_2D);
+            glUniform1i(glGetUniformLocation(programID, "texture0"), 1);
        
         }
         else{
-            fsrData.input_width   = wha[frame_id][0];
-            fsrData.input_height  = wha[frame_id][1];
-            fsrData.output_width  = fsrData.input_width  * resolutionScale;
-            fsrData.output_height = fsrData.input_height * resolutionScale;
+            //if(!GENERATED){
 
-            glBindTexture(GL_TEXTURE_2D, outputImage);
+                fsrData.input_width   = wha[frame_id][0];
+                fsrData.input_height  = wha[frame_id][1];
+                fsrData.output_width  = fsrData.input_width  * resolutionScale;
+                fsrData.output_height = fsrData.input_height * resolutionScale;
 
-            glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA32F, fsrData.output_width, fsrData.output_height);
-            glBindTexture(GL_TEXTURE_2D, 0);
+            window_w = fsrData.output_width;
+            window_h = fsrData.output_height;
 
-            glfwSetWindowSize(window, fsrData.output_width, fsrData.output_height);
 
-            initFSR(&fsrData, sharpness);
-            glBindBuffer(GL_ARRAY_BUFFER, fsrData_vbo);
-            glBufferData(GL_ARRAY_BUFFER, sizeof(fsrData), &fsrData, GL_DYNAMIC_DRAW);
-            glBindBuffer(GL_ARRAY_BUFFER, 0);
+            if(out_w != fsrData.output_width && out_h != fsrData.output_height){
+                printf("======= Deleting texture %d ===========\n", outputImage);
+                glDeleteTextures(1, &outputImage);
+                outputImage =  createOutputImage(fsrData);
+                out_w = fsrData.output_width;
+                out_h = fsrData.output_height;
+            }
 
-            if(!GENERATED){
+                printf("window size: %d x %d\n", fsrData.output_width, fsrData.output_height);
+
+                initFSR(&fsrData, sharpness);
+                glBindBuffer(GL_ARRAY_BUFFER, fsrData_vbo);
+                glBufferData(GL_ARRAY_BUFFER, sizeof(fsrData), &fsrData, GL_DYNAMIC_DRAW);
+                glBindBuffer(GL_ARRAY_BUFFER, 0);
+
                 printf("Running FSR\n");
                 runFSR(fsrData, fsrProgramEASU, fsrProgramRCAS, fsrData_vbo, inputTexture, outputImage);
                 GENERATED=true;
-            }
-            glActiveTexture(GL_TEXTURE0);
+            //}
+            glActiveTexture(GL_TEXTURE2);
             glBindTexture(GL_TEXTURE_2D, outputImage);
             //FSR_EN=~FSR_EN;
+            glUniform1i(glGetUniformLocation(programID, "texture0"), 2);
+            
         }
 
+        glfwSetWindowSize(window, window_w, window_h);
         // Draw the triangle with VAO
         //glDrawArrays(GL_TRIANGLES, 0, 6); // 3 indices starting at 0 -> 1 triangle
         glUseProgram(programID);
@@ -353,6 +372,8 @@ int main(){
 
         //cout << duration.count() << " us " << endl;
 	//sum+=duration.count();
+        usleep(100);
+        
     }
 
 
