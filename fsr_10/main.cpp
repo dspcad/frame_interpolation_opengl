@@ -24,6 +24,7 @@ vector<vector<int>> wha;
 int frame_id = 0;
 bool FSR_EN=false;
 bool GENERATED=false;
+double sharpness;
 
 // This function is called when a key is pressed
 static void key_callback(GLFWwindow *window, int key, int scancode, int action, int mode)
@@ -46,6 +47,16 @@ static void key_callback(GLFWwindow *window, int key, int scancode, int action, 
         FSR_EN = !FSR_EN;
         printf(FSR_EN ? "Enable FSR 1.0...\n" : "TURN OFF FSR 1.0...\n");
     }
+    else if(key == GLFW_KEY_A && action == GLFW_PRESS){
+        sharpness +=0.05;
+        sharpness = min(2.0,sharpness);
+    }
+    else if(key == GLFW_KEY_S && action == GLFW_PRESS){
+        sharpness -=0.05;
+        sharpness = max(0.0,sharpness);
+    }
+
+ 
 }
 
 
@@ -213,7 +224,7 @@ int main(){
                                         // Quality:       1.5
                                         // Balanced:      1.7
                                         // Performance:   2.0
-    float  sharpness            = 0.0f; // sharpness in range [0-2], 0 is sharpest
+    sharpness                   = 0.25; // sharpness in range [0-2], 0 is sharpest
 
 
     const std::string baseDir = "sr/";
@@ -340,7 +351,7 @@ int main(){
                 glBufferData(GL_ARRAY_BUFFER, sizeof(fsrData), &fsrData, GL_DYNAMIC_DRAW);
                 glBindBuffer(GL_ARRAY_BUFFER, 0);
 
-                printf("Running FSR\n");
+                printf("Running FSR....    sharpness: %.2f\n",sharpness);
                 runFSR(fsrData, fsrProgramEASU, fsrProgramRCAS, fsrData_vbo, inputTexture, outputImage);
                 GENERATED=true;
             //}
